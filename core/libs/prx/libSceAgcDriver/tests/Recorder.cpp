@@ -9872,6 +9872,10 @@ void writeBackPaddingTests(const Device& device, Recorder& recorder, bool watche
                 const auto slabRetilesBefore = StorageTexture::SlabRetiles();
                 const auto paddingSeedsBefore = StorageTexture::PaddingSeedCopies();
                 const auto importRetilesBefore = StorageTexture::LinearImportRetiles();
+             const bool watchedAtWriteBack = watched && test.tileMode == TextureTileMode::kLinear && [&] {
+                 std::lock_guard gpu(GpuMutex());
+                 return WatchedAfterSettle(context, address, surfaceBytes);
+             }();
                 image->WriteBack();
                 recorder.Submit();
                 device.WaitQueue();
@@ -9890,7 +9894,7 @@ void writeBackPaddingTests(const Device& device, Recorder& recorder, bool watche
                 if (!importRetile && importRetiled != 0) failures += what + ": the linear write-back retiled into the import with APS5_NO_LINEAR_IMPORT_RETILE set\n";
                 if (watched && !deviceLocalImport && !hostRetile && importRetiled != 0) failures += what + ": the linear write-back retiled into an import outside a device-local heap\n";
                 std::vector<std::byte> read(bytes);
-                if (watched) AgcDriver::GuestMemory::Read(blockAddress, read);
+                if watchedAtWriteBack
                 else std::memcpy(read.data(), memory, bytes);
                 std::size_t texels = 0, garbage = 0, outside = 0;
                 for (std::size_t i = 0; i < bytes; i += 4) {
